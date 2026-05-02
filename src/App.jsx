@@ -1,0 +1,314 @@
+import { useState, useEffect } from "react";
+
+const SECTORS = {
+  "Productores y Agro": ["Aguacate / Berries","Ganadería / Bovinos","Hortalizas / Jitomate","Agave / Mezcal / Tequila","Apicultura","Viveros","Otro agro"],
+  "Construcción e Inmobiliario": ["Constructora pequeña","Contratista / Maestro de obras","Arquitecto / Diseño","Inmobiliaria","Venta de materiales de construcción"],
+  "Medicina": ["Dentista","Médico general","Especialista","Clínica privada","Fisioterapeuta","Nutriólogo clínico","Psicólogo"],
+  "Salud y Belleza": ["Clínica estética","Spa / Masajes","Salón de belleza","Barbería","Dermatología cosmética"],
+  "Automotriz": ["Taller mecánico","Agencia de autos usados","Detailing / Carwash","Refaccionaria"],
+  "Restaurantes y Alimentos": ["Restaurante independiente","Cafetería","Food truck","Panadería","Dark kitchen","Marca artesanal"],
+  "Comerciantes y Retail": ["Boutique de ropa","Joyería","Mueblería","Ferretería","Óptica","Abarrotes premium"],
+  "Negocios y PyMEs": ["Agencia de marketing","Despacho contable","Despacho legal","Escuela / Academia","Gimnasio","Otro B2B"],
+  "Eventos": ["Organizador de eventos","Salón / Banquetero","Fotografía / Video","Wedding planner","DJ"],
+  "Fitness y Wellness": ["Gimnasio independiente","Entrenador personal","Yoga / Pilates","Nutriólogo deportivo","Suplementos"],
+  "Turismo y Hospitalidad": ["Hotel boutique","Airbnb / Renta vacacional","Tour operador","Agencia de viajes"],
+  "Servicios Profesionales": ["Abogado / Despacho","Contador / Despacho","Consultor / Asesor","Asesor financiero"],
+  "Educación": ["Escuela privada","Academia de idiomas","Cursos técnicos","Tutor / Profesor"],
+  "Mascotas": ["Veterinaria","Estética canina","Hotel para mascotas","Alimentos pet"],
+  "Manufactura e Industria": ["Maquila pequeña","Taller de muebles","Taller metalmecánico","Artesanal escalado"],
+  "Emprendedores y Creadores": ["Coach / Consultor","Infoproductor","Creador de contenido","Otro digital"],
+};
+
+const REVENUE_RANGES = ["Menos de $30,000 MXN/mes","$30,000 – $100,000 MXN/mes","$100,000 – $300,000 MXN/mes","$300,000 – $1,000,000 MXN/mes","Más de $1,000,000 MXN/mes","Prefiero no decirlo"];
+const EMPLOYEE_RANGES = ["Solo yo","2 – 5","6 – 15","16 – 50","Más de 50"];
+const YEARS_RANGES = ["Menos de 1 año","1 – 3 años","3 – 5 años","5 – 10 años","Más de 10 años"];
+const BUDGET_RANGES = ["Menos de $5,000 MXN","$5,000 – $15,000 MXN","$15,000 – $40,000 MXN","$40,000 – $80,000 MXN","Más de $80,000 MXN","Sin definir aún"];
+const URGENCY = [{v:"inmediata",l:"Esta semana",e:"🔥"},{v:"30dias",l:"Este mes",e:"⚡"},{v:"3meses",l:"En 3 meses",e:"📅"},{v:"explorando",l:"Solo explorando",e:"🔍"}];
+const TOOLS = ["WhatsApp Business","Facebook / Instagram","Meta Ads","Google My Business","Página web","Sistema de agendamiento","CRM","Software CFDI","Excel / Sheets","Ninguna"];
+const PAINS = ["Falta de clientes nuevos","Sin tiempo para redes","Leads que no convierten","Procesos manuales","Sin control de costos","WhatsApp saturado","Sin página web","No aparecen en Google","Cotizaciones lentas","Sin sistema de citas","Sin historial de clientes","Redes inconsistentes","No venden en línea","Sin trazabilidad","Competencia les gana","Todo manual sin automatizar","Mala gestión inventario","Sin reportes ni métricas"];
+const STEPS = ["Contacto","Perfil","Diagnóstico","Resultados"];
+
+const SYSTEM_PROMPT = `Eres un consultor especialista en servicios digitales y automatización con IA para PyMEs mexicanas.
+
+Tus capacidades: videos IA (Runway, Kling, Sora), imágenes IA (Midjourney, Flux), música IA (Suno), apps/software (Cursor, v0, Claude API), código (Python, HTML/JS), automatizaciones (n8n, Make, Zapier), estrategia y contenido.
+
+Precios mercado mexicano 2025: Bajo $1,500-$8,000 MXN | Medio $8,000-$25,000 MXN | Alto $25,000-$80,000+ MXN
+
+TAREA: Genera EXACTAMENTE 3 paquetes diferenciados para el prospecto. Agrega 4to Enterprise solo si el caso lo justifica.
+
+REGLAS: Paquetes específicos para el sector y dolores. Precios en MXN. Cada paquete incluye IA o automatización. ROI en pesos concretos. Nombres creativos por nicho.
+
+RESPONDE SOLO con JSON válido sin backticks:
+{"diagnostico":"2-3 oraciones del problema raíz","prioridad_detectada":"el dolor más urgente","paquetes":[{"nombre":"nombre creativo","nivel":"Básico","precio":"$X,XXX MXN/mes","tipo":"retainer","descripcion":"1-2 oraciones","incluye":["entregable 1","entregable 2","entregable 3","entregable 4","entregable 5"],"tiempo_resultados":"X días","roi_argumento":"qué gana en MXN","ideal_para":"perfil del cliente","quick_win":"resultado en 7 días"}],"siguiente_paso":"acción concreta al terminar la llamada"}`;
+
+const NIVEL_STYLE = {
+  "Básico":     {color:"#58a6ff",bg:"rgba(88,166,255,0.08)",border:"rgba(88,166,255,0.2)"},
+  "Profesional":{color:"#a5a0ff",bg:"rgba(165,160,255,0.08)",border:"rgba(165,160,255,0.2)"},
+  "Premium":    {color:"#e3b341",bg:"rgba(227,179,65,0.08)",border:"rgba(227,179,65,0.2)"},
+  "Enterprise": {color:"#f78166",bg:"rgba(247,129,102,0.08)",border:"rgba(247,129,102,0.2)"},
+};
+
+const initData = () => ({nombre:"",empresa:"",ciudad:"",whatsapp:"",email:"",sector:"",subSector:"",años:"",empleados:"",facturacion:"",herramientas:[],pains:[],problemaLibre:"",urgencia:"",presupuesto:"",experienciaPrevia:"no",noFunciono:"",notas:""});
+
+const S = {
+  label:{display:"block",fontSize:"12px",fontWeight:500,letterSpacing:"0.06em",textTransform:"uppercase",color:"#7d8590",marginBottom:"6px"},
+  input:{width:"100%",background:"#161b22",border:"1px solid #30363d",borderRadius:"8px",padding:"10px 14px",color:"#e6edf3",fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"border-color 0.15s"},
+  card:{background:"#161b22",border:"1px solid #21262d",borderRadius:"12px",padding:"20px",marginBottom:"16px"},
+  chip:(a)=>({display:"inline-flex",alignItems:"center",gap:"6px",padding:"7px 12px",borderRadius:"20px",fontSize:"13px",cursor:"pointer",border:`1px solid ${a?"#58a6ff":"#30363d"}`,background:a?"rgba(88,166,255,0.1)":"transparent",color:a?"#58a6ff":"#8b949e",transition:"all 0.15s",userSelect:"none",margin:"4px"}),
+  select:{width:"100%",background:"#161b22",border:"1px solid #30363d",borderRadius:"8px",padding:"10px 14px",color:"#e6edf3",fontSize:"14px",outline:"none",boxSizing:"border-box",fontFamily:"inherit",appearance:"none",cursor:"pointer"},
+};
+
+function Label({children}){return <label style={S.label}>{children}</label>;}
+function TextInput({value,onChange,placeholder}){return <input style={S.input} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder||""} onFocus={e=>e.target.style.borderColor="#58a6ff"} onBlur={e=>e.target.style.borderColor="#30363d"}/>;}
+function SelectField({value,onChange,options,placeholder}){return(<div style={{position:"relative"}}><select style={S.select} value={value} onChange={e=>onChange(e.target.value)} onFocus={e=>e.target.style.borderColor="#58a6ff"} onBlur={e=>e.target.style.borderColor="#30363d"}><option value="">{placeholder||"Seleccionar..."}</option>{options.map(o=><option key={o} value={o}>{o}</option>)}</select><span style={{position:"absolute",right:"12px",top:"50%",transform:"translateY(-50%)",pointerEvents:"none",color:"#8b949e",fontSize:"12px"}}>▾</span></div>);}
+function Chip({label,active,onClick}){return <button style={S.chip(active)} onClick={onClick}>{label}</button>;}
+function Field({label,children}){return <div style={{marginBottom:"16px"}}><Label>{label}</Label>{children}</div>;}
+
+function PackageCard({pkg,onCopy}){
+  const ns=NIVEL_STYLE[pkg.nivel]||NIVEL_STYLE["Básico"];
+  return(
+    <div style={{...S.card,borderColor:ns.border,position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",top:0,left:0,right:0,height:"3px",background:ns.color,opacity:0.6}}/>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"12px",flexWrap:"wrap",gap:"8px"}}>
+        <div>
+          <span style={{fontSize:"11px",fontWeight:600,letterSpacing:"0.08em",color:ns.color,textTransform:"uppercase",background:ns.bg,border:`1px solid ${ns.border}`,padding:"3px 8px",borderRadius:"20px"}}>{pkg.nivel}</span>
+          <h3 style={{margin:"8px 0 2px",fontSize:"18px",fontWeight:600,color:"#e6edf3"}}>{pkg.nombre}</h3>
+          <p style={{margin:0,fontSize:"13px",color:"#8b949e"}}>{pkg.descripcion}</p>
+        </div>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontSize:"22px",fontWeight:700,color:ns.color}}>{pkg.precio}</div>
+          <div style={{fontSize:"11px",color:"#7d8590",marginTop:"2px",textTransform:"capitalize"}}>{pkg.tipo}</div>
+        </div>
+      </div>
+      <div style={{marginBottom:"14px"}}>{pkg.incluye?.map((item,i)=><div key={i} style={{display:"flex",alignItems:"flex-start",gap:"8px",padding:"4px 0"}}><span style={{color:ns.color,fontSize:"13px",flexShrink:0}}>✓</span><span style={{fontSize:"13px",color:"#c9d1d9"}}>{item}</span></div>)}</div>
+      <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid #21262d",borderRadius:"8px",padding:"12px",marginBottom:"12px"}}>
+        <div style={{fontSize:"11px",fontWeight:600,color:"#3fb950",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:"4px"}}>ROI esperado</div>
+        <div style={{fontSize:"13px",color:"#c9d1d9"}}>{pkg.roi_argumento}</div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px",marginBottom:"14px"}}>
+        <div style={{background:"rgba(255,255,255,0.02)",borderRadius:"8px",padding:"10px"}}>
+          <div style={{fontSize:"11px",color:"#7d8590",marginBottom:"3px"}}>⚡ Quick win (7 días)</div>
+          <div style={{fontSize:"12px",color:"#8b949e"}}>{pkg.quick_win}</div>
+        </div>
+        <div style={{background:"rgba(255,255,255,0.02)",borderRadius:"8px",padding:"10px"}}>
+          <div style={{fontSize:"11px",color:"#7d8590",marginBottom:"3px"}}>📅 Primeros resultados</div>
+          <div style={{fontSize:"12px",color:"#8b949e"}}>{pkg.tiempo_resultados}</div>
+        </div>
+      </div>
+      <div style={{borderTop:"1px solid #21262d",paddingTop:"10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{fontSize:"12px",color:"#7d8590"}}>Ideal: {pkg.ideal_para}</span>
+        <button onClick={onCopy} style={{background:"transparent",border:"1px solid #30363d",borderRadius:"6px",padding:"5px 10px",color:"#8b949e",fontSize:"12px",cursor:"pointer"}}>Copiar</button>
+      </div>
+    </div>
+  );
+}
+
+function SettingsPanel({sheetsUrl,setSheetsUrl,onClose}){
+  const script = `function doPost(e) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var d = JSON.parse(e.postData.contents);
+  sheet.appendRow([d.timestamp,d.nombre,d.empresa,d.ciudad,d.whatsapp,d.email,d.sector,d.subSector,d.años,d.empleados,d.facturacion,d.pains,d.urgencia,d.presupuesto,d.paquete1,d.precio1,d.paquete2,d.precio2,d.paquete3,d.precio3]);
+  return ContentService.createTextOutput("ok");
+}`;
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:100,padding:"20px"}}>
+      <div style={{background:"#161b22",border:"1px solid #30363d",borderRadius:"16px",padding:"24px",maxWidth:"560px",width:"100%",maxHeight:"85vh",overflowY:"auto"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
+          <h3 style={{margin:0,color:"#e6edf3",fontSize:"16px"}}>Conectar Google Sheets</h3>
+          <button onClick={onClose} style={{background:"transparent",border:"none",color:"#8b949e",cursor:"pointer",fontSize:"18px"}}>×</button>
+        </div>
+        <ol style={{fontSize:"13px",color:"#8b949e",lineHeight:1.7,paddingLeft:"20px",margin:"0 0 16px"}}>
+          <li>Abre Google Sheets → Extensiones → Apps Script</li>
+          <li>Pega el script de abajo y guarda</li>
+          <li>Implementar → Nueva implementación → Aplicación web → Acceso: Cualquier persona</li>
+          <li>Copia la URL y pégala abajo</li>
+        </ol>
+        <div style={{background:"#0d1117",border:"1px solid #21262d",borderRadius:"8px",padding:"12px",marginBottom:"12px"}}>
+          <pre style={{margin:0,fontSize:"12px",color:"#7ee787",whiteSpace:"pre-wrap"}}>{script}</pre>
+        </div>
+        <button onClick={()=>navigator.clipboard.writeText(script)} style={{width:"100%",marginBottom:"16px",padding:"8px",background:"transparent",border:"1px solid #30363d",borderRadius:"6px",color:"#8b949e",fontSize:"13px",cursor:"pointer"}}>Copiar script</button>
+        <Field label="URL del Apps Script">
+          <TextInput value={sheetsUrl} onChange={setSheetsUrl} placeholder="https://script.google.com/macros/s/.../exec"/>
+        </Field>
+        <button onClick={onClose} style={{width:"100%",padding:"10px",background:"#238636",border:"none",borderRadius:"8px",color:"#fff",fontSize:"14px",cursor:"pointer",fontFamily:"inherit"}}>Guardar y cerrar</button>
+      </div>
+    </div>
+  );
+}
+
+export default function App(){
+  const [step,setStep]=useState(0);
+  const [data,setData]=useState(initData());
+  const [result,setResult]=useState(null);
+  const [loading,setLoading]=useState(false);
+  const [error,setError]=useState(null);
+  const [sheetsUrl,setSheetsUrl]=useState("");
+  const [showSettings,setShowSettings]=useState(false);
+  const [saved,setSaved]=useState(false);
+
+  useEffect(()=>{
+    const link=document.createElement("link");
+    link.href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap";
+    link.rel="stylesheet";
+    document.head.appendChild(link);
+  },[]);
+
+  const set=(k,v)=>setData(p=>({...p,[k]:v}));
+  const toggle=(k,v)=>setData(p=>({...p,[k]:p[k].includes(v)?p[k].filter(x=>x!==v):[...p[k],v]}));
+
+  const canAdvance=()=>{
+    if(step===0)return data.nombre&&data.empresa;
+    if(step===1)return data.sector;
+    if(step===2)return(data.pains.length>0||data.problemaLibre)&&data.urgencia&&data.presupuesto;
+    return true;
+  };
+
+  const analyze=async()=>{
+    setLoading(true);setError(null);
+    const prompt=`PROSPECTO: ${data.nombre} | Empresa: ${data.empresa} | Ciudad: ${data.ciudad}
+SECTOR: ${data.sector} > ${data.subSector}
+Años: ${data.años} | Empleados: ${data.empleados} | Facturación: ${data.facturacion}
+Herramientas: ${data.herramientas.join(", ")||"ninguna"}
+DOLORES: ${data.pains.join(", ")}
+En sus palabras: "${data.problemaLibre}"
+Urgencia: ${data.urgencia} | Presupuesto: ${data.presupuesto}
+Experiencia previa: ${data.experienciaPrevia}${data.noFunciono?` (no funcionó: ${data.noFunciono})`:""}
+Notas: ${data.notas||"ninguna"}`;
+    try{
+      const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,system:SYSTEM_PROMPT,messages:[{role:"user",content:prompt}]})});
+      const json=await res.json();
+      const text=json.content?.[0]?.text||"";
+      const clean=text.replace(/```json|```/g,"").trim();
+      const parsed=JSON.parse(clean);
+      setResult(parsed);setStep(3);
+      if(sheetsUrl){
+        const ps=parsed.paquetes||[];
+        fetch(sheetsUrl,{method:"POST",mode:"no-cors",headers:{"Content-Type":"application/json"},body:JSON.stringify({timestamp:new Date().toISOString(),...data,pains:data.pains.join(", "),herramientas:data.herramientas.join(", "),paquete1:ps[0]?.nombre,precio1:ps[0]?.precio,paquete2:ps[1]?.nombre,precio2:ps[1]?.precio,paquete3:ps[2]?.nombre,precio3:ps[2]?.precio})}).then(()=>setSaved(true)).catch(()=>{});
+      }
+    }catch(e){setError("Error al analizar. Revisa conexión e intenta de nuevo.");}
+    finally{setLoading(false);}
+  };
+
+  const copyAll=()=>{
+    if(!result)return;
+    let text=`*Propuesta ConsultorIA*\nPara: ${data.empresa}\n\n${result.diagnostico}\n\n`;
+    result.paquetes?.forEach(p=>{text+=`━━━━━━━━━━\n📦 *${p.nombre}* (${p.nivel})\n💰 ${p.precio}\n${p.descripcion}\n\n✅ Incluye:\n${p.incluye.map(i=>`• ${i}`).join("\n")}\n\n📈 ${p.roi_argumento}\n\n`;});
+    text+=`*Siguiente paso:* ${result.siguiente_paso}`;
+    navigator.clipboard.writeText(text).catch(()=>{});
+  };
+
+  const copyPkg=(pkg)=>{
+    const text=`📦 *${pkg.nombre}* (${pkg.nivel})\n💰 ${pkg.precio} | ${pkg.tipo}\n\n${pkg.descripcion}\n\n✅ Incluye:\n${pkg.incluye.map(i=>`• ${i}`).join("\n")}\n\n📈 ROI: ${pkg.roi_argumento}\n⚡ Quick win: ${pkg.quick_win}\n📅 Resultados en: ${pkg.tiempo_resultados}`;
+    navigator.clipboard.writeText(text).catch(()=>{});
+  };
+
+  return(
+    <div style={{minHeight:"100vh",background:"#0d1117",color:"#e6edf3",fontFamily:"'Outfit',system-ui,sans-serif"}}>
+      {showSettings&&<SettingsPanel sheetsUrl={sheetsUrl} setSheetsUrl={setSheetsUrl} onClose={()=>setShowSettings(false)}/>}
+      <div style={{borderBottom:"1px solid #21262d",padding:"14px 24px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{fontSize:"16px",fontWeight:700,color:"#e6edf3",letterSpacing:"-0.02em"}}>ConsultorIA</div>
+          <div style={{fontSize:"11px",color:"#7d8590"}}>Cotizador inteligente con IA</div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+          {saved&&<span style={{fontSize:"12px",color:"#3fb950"}}>✓ Guardado en Sheets</span>}
+          <button onClick={()=>setShowSettings(true)} style={{background:"transparent",border:"1px solid #30363d",borderRadius:"6px",padding:"6px 12px",color:"#8b949e",fontSize:"12px",cursor:"pointer"}}>⚙ Sheets</button>
+        </div>
+      </div>
+      {step<3&&(
+        <div style={{padding:"16px 24px 0"}}>
+          <div style={{display:"flex",gap:"8px",marginBottom:"12px"}}>
+            {STEPS.slice(0,3).map((_,i)=><div key={i} style={{flex:1,height:"3px",borderRadius:"3px",background:i<=step?"#58a6ff":"#21262d",transition:"background 0.3s"}}/>)}
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between"}}>
+            {STEPS.slice(0,3).map((s,i)=><span key={i} style={{fontSize:"11px",color:i===step?"#58a6ff":i<step?"#3fb950":"#7d8590",fontWeight:i===step?600:400}}>{i<step?"✓ ":""}{s}</span>)}
+          </div>
+        </div>
+      )}
+      <div style={{padding:"20px 24px",maxWidth:"760px",margin:"0 auto"}}>
+        {step===0&&(
+          <div>
+            <h2 style={{margin:"0 0 20px",fontSize:"18px",fontWeight:600,color:"#e6edf3"}}>Datos del prospecto</h2>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px"}}>
+              <Field label="Nombre"><TextInput value={data.nombre} onChange={v=>set("nombre",v)} placeholder="Juan Pérez"/></Field>
+              <Field label="Empresa"><TextInput value={data.empresa} onChange={v=>set("empresa",v)} placeholder="Rancho La Esperanza"/></Field>
+              <Field label="WhatsApp"><TextInput value={data.whatsapp} onChange={v=>set("whatsapp",v)} placeholder="+52 33 1234 5678"/></Field>
+              <Field label="Email"><TextInput value={data.email} onChange={v=>set("email",v)} placeholder="correo@dominio.com"/></Field>
+              <Field label="Ciudad"><TextInput value={data.ciudad} onChange={v=>set("ciudad",v)} placeholder="Guadalajara, Jalisco"/></Field>
+            </div>
+          </div>
+        )}
+        {step===1&&(
+          <div>
+            <h2 style={{margin:"0 0 20px",fontSize:"18px",fontWeight:600,color:"#e6edf3"}}>Perfil del negocio</h2>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px"}}>
+              <Field label="Sector"><SelectField value={data.sector} onChange={v=>{set("sector",v);set("subSector","");}} options={Object.keys(SECTORS)} placeholder="Selecciona el sector"/></Field>
+              <Field label="Sub-categoría"><SelectField value={data.subSector} onChange={v=>set("subSector",v)} options={data.sector?(SECTORS[data.sector]||[]):[]} placeholder={data.sector?"Selecciona...":"Elige sector primero"}/></Field>
+              <Field label="Años en operación"><SelectField value={data.años} onChange={v=>set("años",v)} options={YEARS_RANGES}/></Field>
+              <Field label="Empleados"><SelectField value={data.empleados} onChange={v=>set("empleados",v)} options={EMPLOYEE_RANGES}/></Field>
+              <div style={{gridColumn:"1/-1"}}><Field label="Facturación mensual aprox."><SelectField value={data.facturacion} onChange={v=>set("facturacion",v)} options={REVENUE_RANGES}/></Field></div>
+            </div>
+            <Field label="Herramientas digitales actuales">
+              <div style={{display:"flex",flexWrap:"wrap",gap:"2px",marginTop:"4px"}}>{TOOLS.map(t=><Chip key={t} label={t} active={data.herramientas.includes(t)} onClick={()=>toggle("herramientas",t)}/>)}</div>
+            </Field>
+          </div>
+        )}
+        {step===2&&(
+          <div>
+            <h2 style={{margin:"0 0 20px",fontSize:"18px",fontWeight:600,color:"#e6edf3"}}>Diagnóstico de dolores</h2>
+            <Field label="Problemas identificados">
+              <div style={{display:"flex",flexWrap:"wrap",gap:"2px",marginTop:"4px"}}>{PAINS.map(p=><Chip key={p} label={p} active={data.pains.includes(p)} onClick={()=>toggle("pains",p)}/>)}</div>
+            </Field>
+            <Field label="En sus propias palabras — ¿cuál es su mayor problema?">
+              <textarea style={{...S.input,minHeight:"80px",resize:"vertical",lineHeight:"1.5"}} value={data.problemaLibre} onChange={e=>set("problemaLibre",e.target.value)} placeholder="Lo que dijo el cliente..." onFocus={e=>e.target.style.borderColor="#58a6ff"} onBlur={e=>e.target.style.borderColor="#30363d"}/>
+            </Field>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px"}}>
+              <Field label="Urgencia">
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"6px",marginTop:"4px"}}>
+                  {URGENCY.map(u=><button key={u.v} onClick={()=>set("urgencia",u.v)} style={{padding:"10px 8px",borderRadius:"8px",border:`1px solid ${data.urgencia===u.v?"#58a6ff":"#30363d"}`,background:data.urgencia===u.v?"rgba(88,166,255,0.1)":"transparent",color:data.urgencia===u.v?"#58a6ff":"#8b949e",cursor:"pointer",fontSize:"13px",display:"flex",alignItems:"center",gap:"6px"}}><span style={{fontSize:"14px"}}>{u.e}</span>{u.l}</button>)}
+                </div>
+              </Field>
+              <Field label="Presupuesto disponible"><SelectField value={data.presupuesto} onChange={v=>set("presupuesto",v)} options={BUDGET_RANGES}/></Field>
+              <Field label="¿Ha contratado servicios digitales?">
+                <div style={{display:"flex",gap:"8px",marginTop:"4px"}}>
+                  {["sí","no","intentó pero no funcionó"].map(o=><button key={o} onClick={()=>set("experienciaPrevia",o)} style={{...S.chip(data.experienciaPrevia===o),flex:1,justifyContent:"center"}}>{o}</button>)}
+                </div>
+              </Field>
+              <Field label="¿Qué no funcionó?"><TextInput value={data.noFunciono} onChange={v=>set("noFunciono",v)} placeholder="Ej: la agencia no entregó"/></Field>
+              <div style={{gridColumn:"1/-1"}}><Field label="Notas adicionales"><textarea style={{...S.input,minHeight:"60px",resize:"vertical",lineHeight:"1.5"}} value={data.notas} onChange={e=>set("notas",e.target.value)} placeholder="Objeciones, contexto adicional..." onFocus={e=>e.target.style.borderColor="#58a6ff"} onBlur={e=>e.target.style.borderColor="#30363d"}/></Field></div>
+            </div>
+          </div>
+        )}
+        {step===3&&result&&(
+          <div>
+            <div style={{...S.card,borderColor:"rgba(63,185,80,0.25)",background:"rgba(63,185,80,0.05)",marginBottom:"20px"}}>
+              <div style={{fontSize:"11px",fontWeight:600,color:"#3fb950",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:"8px"}}>Diagnóstico</div>
+              <p style={{margin:"0 0 10px",fontSize:"14px",color:"#c9d1d9",lineHeight:"1.6"}}>{result.diagnostico}</p>
+              <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                <span style={{fontSize:"11px",color:"#7d8590"}}>Prioridad:</span>
+                <span style={{fontSize:"12px",color:"#e3b341",background:"rgba(227,179,65,0.1)",border:"1px solid rgba(227,179,65,0.2)",borderRadius:"20px",padding:"3px 10px"}}>{result.prioridad_detectada}</span>
+              </div>
+            </div>
+            <div style={{marginBottom:"4px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <h2 style={{margin:0,fontSize:"16px",fontWeight:600,color:"#8b949e"}}>Paquetes propuestos</h2>
+              <button onClick={copyAll} style={{background:"transparent",border:"1px solid #30363d",borderRadius:"6px",padding:"6px 12px",color:"#8b949e",fontSize:"12px",cursor:"pointer"}}>Copiar todo para WhatsApp</button>
+            </div>
+            <p style={{margin:"4px 0 16px",fontSize:"12px",color:"#7d8590"}}>Para: {data.empresa} — {data.sector}</p>
+            {result.paquetes?.map((pkg,i)=><PackageCard key={i} pkg={pkg} onCopy={()=>copyPkg(pkg)}/>)}
+            {result.siguiente_paso&&<div style={{...S.card,borderColor:"rgba(88,166,255,0.2)",background:"rgba(88,166,255,0.05)"}}><div style={{fontSize:"11px",fontWeight:600,color:"#58a6ff",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:"6px"}}>Siguiente paso</div><p style={{margin:0,fontSize:"14px",color:"#c9d1d9"}}>{result.siguiente_paso}</p></div>}
+            <button onClick={()=>{setData(initData());setResult(null);setStep(0);setSaved(false);}} style={{width:"100%",marginTop:"16px",padding:"12px",background:"transparent",border:"1px solid #30363d",borderRadius:"8px",color:"#8b949e",fontSize:"14px",cursor:"pointer"}}>Nueva consultoría</button>
+          </div>
+        )}
+        {error&&<div style={{padding:"12px 16px",background:"rgba(248,81,73,0.1)",border:"1px solid rgba(248,81,73,0.3)",borderRadius:"8px",color:"#f85149",fontSize:"13px",marginBottom:"16px"}}>{error}</div>}
+        {step<3&&(
+          <div style={{display:"flex",gap:"12px",marginTop:"24px"}}>
+            {step>0&&<button onClick={()=>setStep(s=>s-1)} style={{flex:1,padding:"12px",background:"transparent",border:"1px solid #30363d",borderRadius:"8px",color:"#8b949e",fontSize:"14px",cursor:"pointer",fontFamily:"inherit"}}>← Anterior</button>}
+            {step<2?<button onClick={()=>setStep(s=>s+1)} disabled={!canAdvance()} style={{flex:2,padding:"12px",background:canAdvance()?"#1f6feb":"#21262d",border:"none",borderRadius:"8px",color:canAdvance()?"#fff":"#7d8590",fontSize:"14px",cursor:canAdvance()?"pointer":"not-allowed",fontFamily:"inherit",fontWeight:500,transition:"background 0.2s"}}>Siguiente →</button>
+            :<button onClick={analyze} disabled={!canAdvance()||loading} style={{flex:2,padding:"12px",background:canAdvance()&&!loading?"#238636":"#21262d",border:"none",borderRadius:"8px",color:canAdvance()&&!loading?"#fff":"#7d8590",fontSize:"14px",cursor:canAdvance()&&!loading?"pointer":"not-allowed",fontFamily:"inherit",fontWeight:600}}>{loading?"Analizando...":"Generar paquetes con IA ✦"}</button>}
+          </div>
+        )}
+        {loading&&<div style={{textAlign:"center",padding:"40px",color:"#7d8590",fontSize:"13px"}}><div style={{fontSize:"28px",marginBottom:"12px"}}>⚙</div>Analizando el negocio y construyendo paquetes...</div>}
+      </div>
+    </div>
+  );
+              }
