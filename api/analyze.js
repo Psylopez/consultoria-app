@@ -6,43 +6,62 @@ export default async function handler(req, res) {
     const userMessage = messages?.[0]?.content || '';
     const prompt = system + '\n\nDATO DEL USUARIO:\n' + userMessage + '\n\nIMPORTANTE: Responde ÚNICAMENTE con el objeto JSON puro. Sin markdown, sin backticks, sin texto adicional. Solo { ... }.';
 
-    // Try models in order of availability
-    const models = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-pro'];
     let text = '';
     let lastError = '';
 
-    for (const model of models) {
-      const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${process.env.GEMINI_API_KEY}`,
-        {
+    // ── 1. Gemini 1.5 Flash (free, 1500 req/day) ──────────────────────────
+    if (process.env.GEMINI_API_KEY) {
+      try {
+        const r = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: prompt }] }],
+              generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
+            }),
+          }
+        );
+        const d = await r.json();
+        if (!d.error) text = d.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        else lastError = 'Gemini: ' + d.error.message;
+      } catch (e) { lastError = 'Gemini error: ' + e.message; }
+    }
+
+    // ── 2. Groq Llama 3.3 (free fallback) ─────────────────────────────────
+    if (!text && process.env.GROQ_API_KEY) {
+      try {
+        const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+          },
           body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
+            model: 'llama-3.3-70b-versatile',
+            messages: [
+              { role: 'system', content: system },
+              { role: 'user', content: userMessage + '\n\nIMPORTANTE: Responde ÚNICAMENTE con JSON puro. Sin markdown ni backticks.' }
+            ],
+            temperature: 0.4,
+            max_tokens: 2048,
           }),
-        }
-      );
-
-      const data = await geminiRes.json();
-      
-      if (data.error) {
-        lastError = data.error.message || 'API error';
-        continue; // try next model
-      }
-
-      text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      if (text) break; // got a response, stop
+        });
+        const d = await r.json();
+        if (!d.error) text = d.choices?.[0]?.message?.content || '';
+        else lastError = 'Groq: ' + (d.error?.message || JSON.stringify(d.error));
+      } catch (e) { lastError = 'Groq error: ' + e.message; }
     }
 
     if (!text) {
       return res.status(500).json({
-        error: lastError || 'No response from Gemini',
-        content: [{ type: 'text', text: '{"diagnostico":"Error al conectar con IA","prioridad_detectada":"Error","paquetes":[],"siguiente_paso":"Reintentar"}' }]
+        error: lastError || 'All AI providers failed',
+        content: [{ type: 'text', text: '{}' }]
       });
     }
 
-    // Clean markdown
+    // ── Clean JSON ─────────────────────────────────────────────────────────
     text = text.replace(/^```json\s*/gi, '').replace(/^```\s*/gi, '').replace(/```\s*$/gi, '').trim();
     const start = text.indexOf('{');
     const end = text.lastIndexOf('}');
